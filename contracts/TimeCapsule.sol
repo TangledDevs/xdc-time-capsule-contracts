@@ -15,18 +15,25 @@ contract TimeCapsule is ERC721 {
     mapping (uint256 => uint256) private _dueDates;
     mapping (uint256 => string) private _tokenURIs;
     mapping (uint256 => string) private _descs;
+     mapping(uint256 => address[]) private _recipients; // List of addresses that can access the time capsule
 
     constructor() ERC721("Time Capsule","TCC"){
     }
 
     event NewTimeCapsule(uint256 id, address client, uint256 date);
     event DueDateReset(uint256 id, address client, uint256 date);
+    event AddRecipient(uint256 id, address recipient);
+
+    modifier onlyRecipient(uint256 tokenId) {
+        require(isRecipient(tokenId, _msgSender()), "TimeCapsule: Not an authorized recipient");
+        _;
+    }
 
     function dueDate(uint256 tokenId) public view returns (uint256) { return _dueDates[tokenId]; }
 
     function creationDate(uint256 tokenId) public view returns (uint256) { return _createDate[tokenId]; }
 
-    function registerTimeCapsule(uint256 due_Date, string memory uri, string memory desc) public returns (uint256){
+    function registerTimeCapsule(uint256 due_Date, string memory uri, string memory desc, address[] memory recipients) public returns (uint256){
         _tokenIds.increment();
         uint256 newId = _tokenIds.current();
         _mint(_msgSender(), newId);
@@ -34,11 +41,29 @@ contract TimeCapsule is ERC721 {
         _setDueDate(newId, due_Date);
         _setCreationDate(newId, block.timestamp);
         _setDescription(newId, desc);
+        _addRecipients(newId, recipients);
 
         emit NewTimeCapsule(newId, _msgSender(), due_Date);
 
         return newId;
     }
+
+    function addRecipient(uint256 tokenId, address recipient) public {
+        require(ownerOf(tokenId) == _msgSender(), "TimeCapsule: Request is not made by the capsule owner");
+        _addRecipient(tokenId, recipient);
+        
+        emit AddRecipient(tokenId, recipient);
+    }
+
+    function isRecipient(uint256 tokenId, address recipient) public view returns (bool) {
+        for (uint256 i = 0; i < _recipients[tokenId].length; i++) {
+            if (_recipients[tokenId][i] == recipient) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     // A penalty fee for changing the due date.
     // Penalty is 1e11 wei per second; around .01 ether per day
@@ -127,5 +152,15 @@ contract TimeCapsule is ERC721 {
     function _setDescription(uint256 tokenId, string memory _desc) internal{
         require(_exists(tokenId),"ERC721Metadata: URI set of nonexistent token");
         _descs[tokenId] = _desc;
+    }
+
+    function _addRecipient(uint256 tokenId, address recipient) internal {
+        _recipients[tokenId].push(recipient);
+    }
+    
+    function _addRecipients(uint256 tokenId, address[] memory recipients) internal {
+        for (uint256 i = 0; i < recipients.length; i++) {
+            _addRecipient(tokenId, recipients[i]);
+        }
     }
 }
